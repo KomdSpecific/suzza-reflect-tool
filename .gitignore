@@ -1,0 +1,17 @@
+/out
+bin/
+build/
+
+/generated/
+/shared/macros/
+/shared/structtype/
+
+/.vs
+.idea/
+CMakeSettings.json
+CMakePresets.json
+path.txt
+Makefile
+
+settings/
+saves/

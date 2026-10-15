@@ -1,0 +1,28 @@
+suzza-reflect-tool
+
+Copyright (c) 2026 KomdSpecific
+
+This project is licensed under the MIT License.
+See the LICENSE file in the root directory for the full license text.
+
+Third-Party Notices
+===================
+This program depends on LLVM / Clang libraries at runtime and build time.
+
+LLVM / Clang
+Copyright (c) LLVM Project Contributors
+Licensed under the Apache License 2.0 with LLVM Exceptions.
+The full license text is available at:
+https://llvm.org/LICENSE.txt
+
+This repository does NOT contain, distribute or ship any LLVM source code or prebuilt LLVM binaries.
+LLVM libraries are linked during the build process.
+Users are responsible for downloading and installing a compatible LLVM/Clang version from the official LLVM project.
+
+Acknowledgements
+================
+The high-level workflow design of this reflection code generation pipeline
+is inspired by Unreal Engine's code generation architecture.
+All source code within this repository has been independently implemented
+from scratch. No source code from Unreal Engine was read, referenced,
+or copied into this project.

@@ -1,0 +1,3 @@
+#pragma once
+
+#define LLVM_INCLUDE_ROOT "@LLVM_INCLUDE_DIR@"
