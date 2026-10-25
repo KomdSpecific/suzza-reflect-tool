@@ -15,35 +15,43 @@ namespace suz
 {
 	void ConstructClangArgs(const std::vector<std::string>& SourceArgs, std::vector<std::string>& OutArgs);
 
+#pragma region Consumer
 	class HeaderFileASTConsumer : public clang::ASTConsumer
 	{
 	public:
 		HeaderFileASTConsumer(
 			std::unordered_map<std::string, std::vector<clang::SourceLocation>>* MacroExpandMap,
+			std::unordered_map<std::string, unsigned int>* MacroExpandLine,
 			std::unordered_map<std::string, ClassInfo>* ClassInfoList
 		)
-			: m_macroExpandList(MacroExpandMap), m_classInfoList(ClassInfoList)
+			: m_macroExpandList(MacroExpandMap), m_macroExpandLine(MacroExpandLine), m_classInfoList(ClassInfoList)
 		{
 		}
 
 		void HandleTranslationUnit(clang::ASTContext& ASTContext) override
 		{
-			HeaderFileASTVisitor visitor(*m_macroExpandList, *m_classInfoList);
+			HeaderFileASTVisitor visitor(*m_macroExpandList, *m_macroExpandLine, *m_classInfoList);
 			visitor.TraverseDecl(ASTContext.getTranslationUnitDecl());
 		}
 
 		std::unordered_map<std::string, std::vector<clang::SourceLocation>>* m_macroExpandList;
+		std::unordered_map<std::string, unsigned int>* m_macroExpandLine;
 		std::unordered_map<std::string, ClassInfo>* m_classInfoList;
 	};
 
+#pragma endregion
+
+
+#pragma region FrontendAction
 	class HeaderFileASTFrontendAction : public clang::ASTFrontendAction
 	{
 	public:
 		HeaderFileASTFrontendAction(
 			std::unordered_map<std::string, std::vector<clang::SourceLocation>>* MacroExpandMap,
+			std::unordered_map<std::string, unsigned int>* MacroExpandLine,
 			std::unordered_map<std::string, ClassInfo>* ClassInfoList
 		)
-			: m_macroExpandList(MacroExpandMap), m_classInfoList(ClassInfoList)
+			: m_macroExpandList(MacroExpandMap), m_macroExpandLine(MacroExpandLine), m_classInfoList(ClassInfoList)
 		{
 		}
 
@@ -51,7 +59,7 @@ namespace suz
 		bool BeginSourceFileAction(clang::CompilerInstance& CI) override
 		{
 			CI.getPreprocessor().addPPCallbacks(
-				std::make_unique<HeaderCollectPPCallback>(*m_macroExpandList, CI.getSourceManager())
+				std::make_unique<HeaderCollectPPCallback>(*m_macroExpandList, *m_macroExpandLine, CI.getSourceManager())
 			);
 			return true;
 		}
@@ -59,37 +67,47 @@ namespace suz
 		/* 空ASTConsumer, 不解析AST, 只预处理 */
 		std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance& CI, llvm::StringRef) override
 		{
-			return std::make_unique<HeaderFileASTConsumer>(m_macroExpandList, m_classInfoList);
+			return std::make_unique<HeaderFileASTConsumer>(m_macroExpandList, m_macroExpandLine, m_classInfoList);
 		}
 
 		std::unordered_map<std::string, std::vector<clang::SourceLocation>>* m_macroExpandList;
+		std::unordered_map<std::string, unsigned int>* m_macroExpandLine;
 		std::unordered_map<std::string, ClassInfo>* m_classInfoList;
 	};
 
+#pragma endregion
+
+
+#pragma region ActionFactory
 	class HeaderFieldCollectActionFactory : public clang::tooling::FrontendActionFactory
 	{
 	public:
 		HeaderFieldCollectActionFactory(
 			std::unordered_map<std::string, std::vector<clang::SourceLocation>>* MacroExpandMap,
+			std::unordered_map<std::string, unsigned int>* MacroExpandLine,
 			std::unordered_map<std::string, ClassInfo>* ClassInfoList
 		)
-			: m_macroExpandList(MacroExpandMap), m_classInfoList(ClassInfoList)
+			: m_macroExpandList(MacroExpandMap), m_macroExpandLine(MacroExpandLine), m_classInfoList(ClassInfoList)
 		{
 		}
 
 		std::unique_ptr<clang::FrontendAction> create() override
 		{
-			return std::make_unique<HeaderFileASTFrontendAction>(m_macroExpandList, m_classInfoList);
+			return std::make_unique<HeaderFileASTFrontendAction>(m_macroExpandList, m_macroExpandLine, m_classInfoList);
 		}
 
 		std::unordered_map<std::string, std::vector<clang::SourceLocation>>* m_macroExpandList;
+		std::unordered_map<std::string, unsigned int>* m_macroExpandLine;
 		std::unordered_map<std::string, ClassInfo>* m_classInfoList;
 	};
+
+#pragma endregion
 
 	bool RunToolOnParseHeaders(
 		const std::string& FilePath,
 		const std::vector<std::string>& CompileArgs,
 		std::unordered_map<std::string, std::vector<clang::SourceLocation>>& OutMacroExpandMap,
+		std::unordered_map<std::string, unsigned int>& OutMacroExpandLine,
 		std::unordered_map<std::string, ClassInfo>& OutClassInfo
 	)
 	{
@@ -103,7 +121,7 @@ namespace suz
 		ConstructClangArgs(CompileArgs, finalArgs);
 		clang::tooling::FixedCompilationDatabase database(FileSystem::GetExecutableFolder().string(), finalArgs);
 
-		std::unique_ptr<HeaderFieldCollectActionFactory> factory = std::make_unique<HeaderFieldCollectActionFactory>(&OutMacroExpandMap, &OutClassInfo);
+		std::unique_ptr<HeaderFieldCollectActionFactory> factory = std::make_unique<HeaderFieldCollectActionFactory>(&OutMacroExpandMap, &OutMacroExpandLine, &OutClassInfo);
 		/* 将头文件列表传给ClangTool */
 		clang::tooling::ClangTool tool(database, FilePath);
 		/* 对每一个列表中的头文件进行解析 */
@@ -193,6 +211,9 @@ namespace suz
 				continue;
 			}
 		}
+
+		OutArgs.push_back("-D");
+		OutArgs.push_back("SUZZA_REFLECT_PARSING");
 
 		OutArgs.push_back("-I");
 		OutArgs.push_back(LLVM_INCLUDE_ROOT);

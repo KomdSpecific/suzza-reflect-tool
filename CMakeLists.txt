@@ -27,10 +27,11 @@ file(GLOB_RECURSE GENERATED_REFLECT_CODE CONFIGURE_DEPENDS
 # --------------------------- 生成配置文件 ---------------------------
 set(LLVM_INCLUDE_DIR "${LLVM_INCLUDE_DIRS}")
 configure_file(
-	${CMAKE_SOURCE_DIR}/SuzzaGenerateconfig.h.in
-	${CMAKE_BINARY_DIR}/SuzzaGenerateconfig.h
+	${CMAKE_CURRENT_SOURCE_DIR}/shared/SuzzaGenerateconfig.h.in
+	${CMAKE_CURRENT_BINARY_DIR}/shared/SuzzaGenerateconfig.h
 )
 # -------------------------------------------------------------------
+
 
 # 加入LLVM头文件搜索路径
 include_directories(${LLVM_INCLUDE_DIRS})

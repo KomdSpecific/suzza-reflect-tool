@@ -7,16 +7,56 @@
 
 namespace suz
 {
+	enum class ETypeCategory : uint8
+	{
+		Primitive,
+		Enum,
+		Struct,
+		Array,
+		Pointer,
+		Reference,
+		Container,
+		Unknown
+	};
+
+	enum class EPrimitiveType : uint8
+	{
+		Bool,
+		Int8, UInt8,
+		Int16, UInt16,
+		Int32, UInt32,
+		Int64, UInt64,
+		Float,
+		Unknown
+	};
+
+	enum class EFunctionType
+	{
+		Unknown,
+		GetterFunc,
+		SetterFunc
+	};
+
+	enum class Editability : uint8
+	{
+		Editable = 1 << 1,
+		ReadOnly = 1 << 2
+	};
+
 	struct FieldInfo
 	{
-		std::string name;							// 变量名
-		std::string typeName;						// 类型名(如果类型是别名则显示类型别名)
-		bool bIsEditable = false;					// 是否可更改
+		std::string name{};												// 变量名
+		std::string typeName{};											// 类型名(如果类型是别名则显示类型别名)
+		std::string parentClassName{};									// 父类名(如果字段在父类被定义则不为空)
+		std::string editableEnumStr;									// 是否可更改
 
-		/*enum class FieldType
-		{
-			Bool, Int, Float, Vec3, Vec4, ObjPtr
-		} type;*/
+		bool hasGetterMethod = false;
+		std::string getterMethodName{};
+		bool hasSetterMethod = false;
+		std::string setterMethodName{};
+
+		ETypeCategory category = ETypeCategory::Unknown;				// 变量分类
+		EPrimitiveType primitiveType = EPrimitiveType::Unknown;			// 变量具体类型(仅当category==Primitive才有效)
 
 		const bool IsValid() const
 		{
@@ -28,6 +68,7 @@ namespace suz
 	{
 		std::string className;
 		std::string classPath;
+		uint32 macroDefinedLine;
 		std::vector<std::string> superClassName;
 		std::vector<FieldInfo> fields;
 

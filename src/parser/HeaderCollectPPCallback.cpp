@@ -1,4 +1,5 @@
 #include "HeaderCollectPPCallback.h"
+#include "functionLibrary/MacroFilterLibrary.h"
 
 #include <clang/Basic/SourceManager.h>
 #include <clang/Basic/IdentifierTable.h>
@@ -16,21 +17,27 @@ namespace suz
 	{
 		if (MacroNameTok.getIdentifierInfo()->getName() == "SUZZA_REFLECT_CLASS")
 		{
-			/* 缓存宏被使用的位置 */
-			std::string macroFilePath = m_sourceManager.getFilename(MacroNameTok.getLocation()).str();
+			clang::SourceLocation macroLocation = MacroNameTok.getLocation();
+			/* 缓存宏被调用的文件位置 */
+			std::string macroFilePath = m_sourceManager.getFilename(macroLocation).str();
 			std::string genericPath = std::filesystem::path(macroFilePath).generic_string();
+
+			unsigned int macroLine = m_sourceManager.getPresumedLineNumber(macroLocation);
+			/*SUZZA_LOG_INFO("file: ", genericPath, " line: ", macroLine);*/
+			m_macroExpandLine[genericPath] = macroLine;
 
 			auto it = m_macroExpandList.find(genericPath);
 			/* 当前类与其他类存储在同一源文件中 */
 			if (it != m_macroExpandList.end())
 			{
-				clang::SourceLocation macroLocation = MacroNameTok.getLocation();
 				it->second.push_back(macroLocation);
 			}
 			else
 			{
-				m_macroExpandList[genericPath] = { MacroNameTok.getLocation() };
+				m_macroExpandList[genericPath] = { macroLocation };
 			}
 		}
+
+		//MacroFilterLibrary::CollectMacroExpandLineNumber(MacroNameTok, "SUZZA_PROPERTY", m_sourceManager, {});
 	}
 }

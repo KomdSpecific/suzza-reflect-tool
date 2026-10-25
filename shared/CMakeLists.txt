@@ -10,7 +10,7 @@ add_library("${PROJECT_NAME}")
 target_sources("${PROJECT_NAME}" PRIVATE ${SHARED_SOURCES})
 
 # Include Binary Files
-target_include_directories("${PROJECT_NAME}" PRIVATE "${CMAKE_BINARY_DIR}")
+target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
 
 target_include_directories("${PROJECT_NAME}" PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}"

@@ -34,8 +34,7 @@ namespace suz
 		}
 
 		/* 生成头文件文本内容 */
-		std::string headerFileStr = GenerateRegisterHeaderFileStr();
-		registerHeaderOss << headerFileStr << std::endl;
+		registerHeaderOss << GenerateRegisterHeaderFileStr() << std::endl;
 		registerHeaderOss.close();
 
 		std::string registerSourcePath = m_cacheOutFilePath + "/RegisterAllClass.cpp";
@@ -52,7 +51,7 @@ namespace suz
 		{
 			WriteHeaderFile(pair);
 			WriteSourceFile(pair);
-			//SUZZA_LOG_INFO("ClassName: ", pair.first);
+			//SUZZA_LOG_INFO("ClassName: ", pair.first, " Macro defined line: ", pair.second.macroDefinedLine);
 
 			registerSourceOss << GenerateRegisterSourceFileIncludeStr(pair);
 		}
@@ -126,15 +125,31 @@ namespace suz
 		}
 
 		oss << "#pragma once" << "\n" << std::endl;
-		oss << R"(#include "ReflectionInfo.h")" << std::endl;
-		oss << "#undef " << "SUZZA_GENERATED_REFLECT_BODY" << std::endl;
-		oss << "#define " << "SUZZA_GENERATED_REFLECT_BODY " << "\\" << "\n" << "	static const ClassInfo& StaticClass(); \\" << std::endl;
+		oss << R"(#include "macros/ReflectMacros.h")" << std::endl;
+		oss << R"(#include "ReflectionInfo.h")" << "\n" << std::endl;
+		oss << "#undef " << "SUZZA_GENERATED_NAME" << std::endl;
+		oss << "#define " << "SUZZA_GENERATED_NAME " << className + "_REFLECT_CLASS" << "\n";
+		oss << "#define " << className + "_REFLECT_CLASS_" << ClassData.second.macroDefinedLine << "_REFLECT_BODY \\" << std::endl;
 		oss << "	using ThisClass = " << className << "; \\" << std::endl;
 
 		/* Super只能设置一个父类, 统一规定主父类Super是public之后的第一个类 */
 		if (ClassData.second.superClassName.size() > 0)
 		{
-			oss << "	using Super = " << ClassData.second.superClassName[0] << ";" << std::endl;
+			oss << "	using Super = " << ClassData.second.superClassName[0] << "; \\" << std::endl;
+		}
+
+		oss << "	static const ClassInfo m_" << className << "ClassInfo; \\" << std::endl;
+		oss << "	friend struct FieldInfo; \\" << std::endl;
+		oss << "public: \\" << std::endl;
+		oss << "	static const ClassInfo& StaticClass(); \\" << std::endl;
+
+		if (ClassData.second.superClassName.size() > 0)
+		{
+			oss << "	virtual const ClassInfo& GetClassInfo() const override;";
+		}
+		else
+		{
+			oss << "	virtual const ClassInfo& GetClassInfo() const;";
 		}
 
 		oss.close();
@@ -187,43 +202,113 @@ namespace suz
 			return;
 		}
 
-		oss << "#include " << "\"" << className << ".generated.h" << "\"" << std::endl;
 		oss << "#include " << "\"" << includeClassPath << "\"" << "\n" << std::endl;
 
 		oss << "namespace suz" << "\n" << "{" << std::endl;
-		oss << "	static const ClassInfo m_" << className << "ClassInfo = {" << std::endl;
+		oss << "	const ClassInfo " << className << "::m_" << className << "ClassInfo = {" << std::endl;
 		oss << "		\"" << className << "\"," << std::endl;
 		oss << "		\"" << classPath.generic_string() << "\"," << std::endl;
 
-		oss << "		{\"";
-		for (usize i = 0; i < ClassData.second.superClassName.size(); i++)
+		if (ClassData.second.superClassName.size() > 0)
 		{
-			if (i == ClassData.second.superClassName.size() - 1)
+			oss << "		{\"";
+			for (usize i = 0; i < ClassData.second.superClassName.size(); i++)
 			{
-				oss << ClassData.second.superClassName[i] << "\"}," << std::endl;
-				continue;
-			}
+				if (i == ClassData.second.superClassName.size() - 1)
+				{
+					oss << ClassData.second.superClassName[i] << "\"}," << std::endl;
+					continue;
+				}
 
-			oss << ClassData.second.superClassName[i] << "\", \"";
+				oss << ClassData.second.superClassName[i] << "\", \"";
+			}
+		}
+		else
+		{
+			oss << "		{}," << std::endl;
 		}
 
-		oss << "		{\n				{";
-		for (usize i = 0; i < ClassData.second.fields.size(); i++)
+		if (ClassData.second.fields.size() != 0)
 		{
-			if (i == ClassData.second.fields.size() - 1)
+			oss << "		{\n			";
+			for (usize i = 0; i < ClassData.second.fields.size(); i++)
 			{
-				oss << "\"" << ClassData.second.fields[i].name << "\", ";
-				oss << "\"" << ClassData.second.fields[i].typeName << "\", ";
-				oss << "false}\n		}\n	};\n\n	";
-				continue;
-			}
+				FieldInfo currentField = ClassData.second.fields[i];
 
-			oss << "\"" << ClassData.second.fields[i].name << "\", ";
-			oss << "\"" << ClassData.second.fields[i].typeName << "\", ";
-			oss << "false},\n				{";
+				if (i == ClassData.second.fields.size() - 1)
+				{
+					/* 字段为本类的字段 */
+					if (currentField.parentClassName.empty())
+					{
+						oss << "FieldInfo::CreateFieldInfo(";
+						oss << "\"" << currentField.name << "\", ";
+						oss << "\"" << currentField.typeName << "\", ";
+						oss << "SUZZA_OFFSET_OF(" << className + "::" + currentField.name << ")" << ", ";
+						oss << "sizeof(" << currentField.typeName << "), ";
+						oss << currentField.editableEnumStr << ")\n		}\n	};\n\n";
+					}
+					else
+					{
+						if (!currentField.hasGetterMethod) continue;
+
+						oss << "FieldInfo::CreateFieldInfo(";
+						oss << "\"" << currentField.name << "\", ";
+						oss << "\"" << currentField.typeName << "\", ";
+						oss << "\"" << currentField.parentClassName << "\", ";
+						oss << "&" << currentField.parentClassName << "::" << currentField.getterMethodName << ", ";
+						if (currentField.hasSetterMethod)
+						{
+							oss << "&" << currentField.parentClassName << "::" << currentField.setterMethodName << ", ";
+						}
+						else
+						{
+							oss << "nullptr";
+						}
+						oss << currentField.editableEnumStr << ")\n		}\n	};\n\n";
+					}
+					continue;
+				}
+
+				/* 字段为本类的字段 */
+				if (currentField.parentClassName.empty())
+				{
+					oss << "FieldInfo::CreateFieldInfo(";
+					oss << "\"" << currentField.name << "\", ";
+					oss << "\"" << currentField.typeName << "\", ";
+					oss << "SUZZA_OFFSET_OF(" << className + "::" + currentField.name << ")" << ", ";
+					oss << "sizeof(" << currentField.typeName << "), ";
+					oss << currentField.editableEnumStr << "),\n			";
+				}
+				else
+				{
+					if (!currentField.hasGetterMethod) continue;
+
+					oss << "FieldInfo::CreateFieldInfo(";
+					oss << "\"" << currentField.name << "\", ";
+					oss << "\"" << currentField.typeName << "\", ";
+					oss << "\"" << currentField.parentClassName << "\", ";
+					oss << "&" << currentField.parentClassName << "::" << currentField.getterMethodName << ", ";
+					if (currentField.hasSetterMethod)
+					{
+						oss << "&" << currentField.parentClassName << "::" << currentField.setterMethodName << ", ";
+					}
+					else
+					{
+						oss << "nullptr";
+					}
+					oss << currentField.editableEnumStr << "),\n			";
+				}
+			}
+		}
+		else
+		{
+			oss << "		{}\n	};\n\n";
 		}
 
-		oss << "const ClassInfo& " << className << "::StaticClass()\n	{\n			return m_" << className << "ClassInfo;" << std::endl;
+		oss << "	const ClassInfo& " << className << "::StaticClass()\n	{\n		return m_" << className << "ClassInfo;" << std::endl;
+		oss << "	}\n" << std::endl;
+
+		oss << "	const ClassInfo& " << className << "::GetClassInfo() const\n	{\n		return m_" << className << "ClassInfo;" << std::endl;
 		oss << "	}\n}" << std::endl;
 
 		oss.close();
@@ -234,10 +319,12 @@ namespace suz
 		std::stringstream stream;
 
 		stream << "#pragma once\n" << std::endl;
+		stream << R"(#include "macros/ReflectMacros.h")" << "\n" << std::endl;
 		stream << R"(#undef SUZZA_REGISTER_ALL_REFLECT_CLASS)" << std::endl;
-		stream << R"(#define SUZZA_REGISTER_ALL_REFLECT_CLASS RegisterReflectClass();)" << "\n" << std::endl;
+		stream << R"(#define SUZZA_REGISTER_ALL_REFLECT_CLASS suz::RegisterAllClass::RegisterReflectClass();)" << "\n" << std::endl;
 
-		stream << R"(namespace suz)" << "\n{\n	" << R"(static void RegisterReflectClass();)" << "\n}" << std::endl;
+		stream << R"(namespace suz)" << "\n{\n	" << "class RegisterAllClass\n	{\n	" << "public:\n		";
+		stream<< R"(static void RegisterReflectClass();)" << "\n	};\n}" << std::endl;
 
 		return stream.str();
 	}
@@ -258,7 +345,7 @@ namespace suz
 	{
 		std::stringstream stream;
 
-		stream << "\n" << "namespace suz\n{\n	void RegisterReflectClass()\n	{\n		" << std::endl;
+		stream << "\n" << "namespace suz\n{\n	void RegisterAllClass::RegisterReflectClass()\n	{		" << std::endl;
 		stream << R"(		ReflectionSystem& reflectSystem = Engine::GetEngineInstance().GetReflectionSystem();)" << "\n" << std::endl;
 
 		return stream.str();

@@ -10,6 +10,7 @@ namespace suz
 		const std::string& FilePath,
 		const std::vector<std::string>& CompileArgs,
 		std::unordered_map<std::string, std::vector<clang::SourceLocation>>& OutMacroExpandMap,
+		std::unordered_map<std::string, unsigned int>& OutMacroExpandLine,
 		std::unordered_map<std::string, ClassInfo>& OutClassInfo
 	);
 }

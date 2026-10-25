@@ -22,6 +22,7 @@ namespace suz
 	{
 		std::unordered_map<std::string, ClassInfo> classInfo{};
 		std::unordered_map<std::string, std::vector<clang::SourceLocation>> macroExpandList{};
+		std::unordered_map<std::string, unsigned int> macroExpandLine{};
 
 		usize beforeSizeInfo = classInfo.size();
 		for (const llvm::json::Value& value : m_parseFileArr)
@@ -36,6 +37,7 @@ namespace suz
 				file.str(),
 				argList,
 				macroExpandList,
+				macroExpandLine,
 				classInfo
 			);
 			if (!success)
@@ -57,8 +59,21 @@ namespace suz
 			for (const auto& field : s.second.fields)
 			{
 				SUZZA_LOG_INFO("Field name: ", field.name, ",  Type name: ", field.typeName);
+
+				if (field.hasGetterMethod)
+				{
+					SUZZA_LOG_INFO("GetterFunc: ", field.getterMethodName, " SetterFunc: ", field.setterMethodName);
+					SUZZA_LOG_INFO();
+				}
 			}
 			SUZZA_LOG_INFO("\n\n");
+		}*/
+
+		/*for (const auto& s : macroExpandLine)
+		{
+			SUZZA_LOG_INFO("\n");
+			SUZZA_LOG_INFO("File path: ", s.first);
+			SUZZA_LOG_INFO("Line: ", s.second);
 		}*/
 
 		if (!classInfo.empty())
