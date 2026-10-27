@@ -161,20 +161,13 @@ namespace suz
 		const clang::Type* type = QType.getTypePtrOrNull();
 		if (!type) return;
 
-		/* 优先判断STL容器 */
-		if (const clang::TemplateSpecializationType* stlType = type->getAs<clang::TemplateSpecializationType>())
+		/* 优先判断容器类型 */
+		if (const clang::CXXRecordDecl* recordDecl = type->getAsCXXRecordDecl())
 		{
-			clang::TemplateDecl* tempDecl = stlType->getTemplateName().getAsTemplateDecl();
-			if (!tempDecl) return;
+			const auto* specDecl = clang::dyn_cast<clang::ClassTemplateSpecializationDecl>(recordDecl);
+			if (!specDecl) return;
 
-			std::string containerName = tempDecl->getQualifiedNameAsString();
-			if (containerName.empty()) return;
-
-			llvm::ArrayRef<clang::TemplateArgument> argsArray = stlType->template_arguments();
-			for (const clang::TemplateArgument& arg : argsArray)
-			{
-				std::string argName = arg.getAsType().getAsString();
-			}
+			ParseContainerType(specDecl, OutFieldInfo);
 		}
 		else if (type->isPointerType())
 		{
@@ -232,4 +225,115 @@ namespace suz
 			OutFieldInfo.category = ETypeCategory::Unknown;
 		}
 	}
+
+	void PropertyFilterLibrary::ParseContainerType(const clang::ClassTemplateSpecializationDecl* SpecialDecl, FieldInfo& OutFieldInfo)
+	{
+		const clang::ClassTemplateDecl* templateDecl = SpecialDecl->getSpecializedTemplate();
+		if (!templateDecl) return;
+
+		std::string containerName = templateDecl->getQualifiedNameAsString();
+		if (containerName.starts_with("glm::"))
+		{
+			HandleInGlmContainer(containerName, SpecialDecl->getTemplateArgs(), OutFieldInfo);
+		}
+		else if (containerName.starts_with("std::"))
+		{
+			HandleInStdContainer(containerName, OutFieldInfo);
+		}
+	}
+
+	void PropertyFilterLibrary::HandleInGlmContainer(const std::string& ContainerName, const clang::TemplateArgumentList& ArgList, FieldInfo& OutFieldInfo)
+	{
+		/* 设置lambda获取模板变量的辅助函数 */
+		auto tryGetIntegralArg = [&ArgList](uint8 index, uint8& outValue) ->bool {
+			if (index >= ArgList.size()) return false;
+
+			const clang::TemplateArgument& value = ArgList.get(index);
+			if (value.getKind() != clang::TemplateArgument::Integral) return false;
+
+			outValue = value.getAsIntegral().getExtValue();
+			return true;
+			};
+
+		if (ContainerName == "glm::vec")
+		{
+			uint8 value;
+			if (!tryGetIntegralArg(0, value))
+			{
+				return;
+			}
+
+			if (value == 3)
+			{
+				OutFieldInfo.category = ETypeCategory::Container;
+				OutFieldInfo.containerType = EContainerType::Vector3;
+			}
+			else if (value == 4)
+			{
+				OutFieldInfo.category = ETypeCategory::Container;
+				OutFieldInfo.containerType = EContainerType::Vector4;
+			}
+			else
+			{
+				OutFieldInfo.category = ETypeCategory::Unknown;
+				OutFieldInfo.containerType = EContainerType::Unknown;
+			}
+		}
+		else if (ContainerName == "glm::qua")
+		{
+			OutFieldInfo.category = ETypeCategory::Container;
+			OutFieldInfo.containerType = EContainerType::Quat;
+		}
+		else if (ContainerName == "glm::mat")
+		{
+			uint8 column, raw;
+			if (!tryGetIntegralArg(0, column) || !tryGetIntegralArg(1, raw)) return;
+
+			if (column == raw == '3')
+			{
+				OutFieldInfo.category = ETypeCategory::Container;
+				OutFieldInfo.containerType = EContainerType::Matrix3;
+			}
+			else if (column == raw == '4')
+			{
+				OutFieldInfo.category = ETypeCategory::Container;
+				OutFieldInfo.containerType = EContainerType::Matrix4;
+			}
+			else
+			{
+				OutFieldInfo.category = ETypeCategory::Unknown;
+				OutFieldInfo.containerType = EContainerType::Unknown;
+			}
+		}
+	}
+
+	void PropertyFilterLibrary::HandleInStdContainer(const std::string& ContainerName, FieldInfo& OutFieldInfo)
+	{
+		if (ContainerName == "std::basic_string")
+		{
+			OutFieldInfo.category == ETypeCategory::Container;
+			OutFieldInfo.containerType == EContainerType::String;
+		}
+		else if (ContainerName == "std::vector")
+		{
+			OutFieldInfo.category == ETypeCategory::Container;
+			OutFieldInfo.containerType == EContainerType::Vector;
+		}
+		else if (ContainerName == "std::map")
+		{
+			OutFieldInfo.category == ETypeCategory::Container;
+			OutFieldInfo.containerType == EContainerType::Map;
+		}
+		else if (ContainerName == "std::set")
+		{
+			OutFieldInfo.category == ETypeCategory::Container;
+			OutFieldInfo.containerType == EContainerType::Set;
+		}
+	}
+
+	const std::unordered_map<std::string, EContainerType> PropertyFilterLibrary::m_containerSupportedType = {
+		{"glm::vec3", EContainerType::Vector3},{"glm::vec4", EContainerType::Vector4},{"glm::quat",EContainerType::Quat},{"glm::mat3",EContainerType::Matrix3},
+		{"glm::mat4",EContainerType::Matrix4},
+		{"std::string", EContainerType::String},{"std::vector", EContainerType::Vector},{"std::map",EContainerType::Map},{"std::set",EContainerType::Set}
+	};
 }

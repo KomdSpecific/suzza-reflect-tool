@@ -1,4 +1,5 @@
 #include "ReflectFileWriter.h"
+#include "GenerateReflectString.h"
 
 #include <filesystem>
 #include <fstream>
@@ -124,33 +125,7 @@ namespace suz
 			return;
 		}
 
-		oss << "#pragma once" << "\n" << std::endl;
-		oss << R"(#include "macros/ReflectMacros.h")" << std::endl;
-		oss << R"(#include "ReflectionInfo.h")" << "\n" << std::endl;
-		oss << "#undef " << "SUZZA_GENERATED_NAME" << std::endl;
-		oss << "#define " << "SUZZA_GENERATED_NAME " << className + "_REFLECT_CLASS" << "\n";
-		oss << "#define " << className + "_REFLECT_CLASS_" << ClassData.second.macroDefinedLine << "_REFLECT_BODY \\" << std::endl;
-		oss << "	using ThisClass = " << className << "; \\" << std::endl;
-
-		/* Super只能设置一个父类, 统一规定主父类Super是public之后的第一个类 */
-		if (ClassData.second.superClassName.size() > 0)
-		{
-			oss << "	using Super = " << ClassData.second.superClassName[0] << "; \\" << std::endl;
-		}
-
-		oss << "	static const ClassInfo m_" << className << "ClassInfo; \\" << std::endl;
-		oss << "	friend struct FieldInfo; \\" << std::endl;
-		oss << "public: \\" << std::endl;
-		oss << "	static const ClassInfo& StaticClass(); \\" << std::endl;
-
-		if (ClassData.second.superClassName.size() > 0)
-		{
-			oss << "	virtual const ClassInfo& GetClassInfo() const override;";
-		}
-		else
-		{
-			oss << "	virtual const ClassInfo& GetClassInfo() const;";
-		}
+		oss << GenerateReflectString::GenerateClassHeaderString(ClassData, className);
 
 		oss.close();
 	}
@@ -202,114 +177,7 @@ namespace suz
 			return;
 		}
 
-		oss << "#include " << "\"" << includeClassPath << "\"" << "\n" << std::endl;
-
-		oss << "namespace suz" << "\n" << "{" << std::endl;
-		oss << "	const ClassInfo " << className << "::m_" << className << "ClassInfo = {" << std::endl;
-		oss << "		\"" << className << "\"," << std::endl;
-		oss << "		\"" << classPath.generic_string() << "\"," << std::endl;
-
-		if (ClassData.second.superClassName.size() > 0)
-		{
-			oss << "		{\"";
-			for (usize i = 0; i < ClassData.second.superClassName.size(); i++)
-			{
-				if (i == ClassData.second.superClassName.size() - 1)
-				{
-					oss << ClassData.second.superClassName[i] << "\"}," << std::endl;
-					continue;
-				}
-
-				oss << ClassData.second.superClassName[i] << "\", \"";
-			}
-		}
-		else
-		{
-			oss << "		{}," << std::endl;
-		}
-
-		if (ClassData.second.fields.size() != 0)
-		{
-			oss << "		{\n			";
-			for (usize i = 0; i < ClassData.second.fields.size(); i++)
-			{
-				FieldInfo currentField = ClassData.second.fields[i];
-
-				if (i == ClassData.second.fields.size() - 1)
-				{
-					/* 字段为本类的字段 */
-					if (currentField.parentClassName.empty())
-					{
-						oss << "FieldInfo::CreateFieldInfo(";
-						oss << "\"" << currentField.name << "\", ";
-						oss << "\"" << currentField.typeName << "\", ";
-						oss << "SUZZA_OFFSET_OF(" << className + "::" + currentField.name << ")" << ", ";
-						oss << "sizeof(" << currentField.typeName << "), ";
-						oss << currentField.editableEnumStr << ")\n		}\n	};\n\n";
-					}
-					else
-					{
-						if (!currentField.hasGetterMethod) continue;
-
-						oss << "FieldInfo::CreateFieldInfo(";
-						oss << "\"" << currentField.name << "\", ";
-						oss << "\"" << currentField.typeName << "\", ";
-						oss << "\"" << currentField.parentClassName << "\", ";
-						oss << "&" << currentField.parentClassName << "::" << currentField.getterMethodName << ", ";
-						if (currentField.hasSetterMethod)
-						{
-							oss << "&" << currentField.parentClassName << "::" << currentField.setterMethodName << ", ";
-						}
-						else
-						{
-							oss << "nullptr";
-						}
-						oss << currentField.editableEnumStr << ")\n		}\n	};\n\n";
-					}
-					continue;
-				}
-
-				/* 字段为本类的字段 */
-				if (currentField.parentClassName.empty())
-				{
-					oss << "FieldInfo::CreateFieldInfo(";
-					oss << "\"" << currentField.name << "\", ";
-					oss << "\"" << currentField.typeName << "\", ";
-					oss << "SUZZA_OFFSET_OF(" << className + "::" + currentField.name << ")" << ", ";
-					oss << "sizeof(" << currentField.typeName << "), ";
-					oss << currentField.editableEnumStr << "),\n			";
-				}
-				else
-				{
-					if (!currentField.hasGetterMethod) continue;
-
-					oss << "FieldInfo::CreateFieldInfo(";
-					oss << "\"" << currentField.name << "\", ";
-					oss << "\"" << currentField.typeName << "\", ";
-					oss << "\"" << currentField.parentClassName << "\", ";
-					oss << "&" << currentField.parentClassName << "::" << currentField.getterMethodName << ", ";
-					if (currentField.hasSetterMethod)
-					{
-						oss << "&" << currentField.parentClassName << "::" << currentField.setterMethodName << ", ";
-					}
-					else
-					{
-						oss << "nullptr";
-					}
-					oss << currentField.editableEnumStr << "),\n			";
-				}
-			}
-		}
-		else
-		{
-			oss << "		{}\n	};\n\n";
-		}
-
-		oss << "	const ClassInfo& " << className << "::StaticClass()\n	{\n		return m_" << className << "ClassInfo;" << std::endl;
-		oss << "	}\n" << std::endl;
-
-		oss << "	const ClassInfo& " << className << "::GetClassInfo() const\n	{\n		return m_" << className << "ClassInfo;" << std::endl;
-		oss << "	}\n}" << std::endl;
+		oss << GenerateReflectString::GenerateClassSourceString(ClassData, includeClassPath, className, classPath.generic_string());
 
 		oss.close();
 	}

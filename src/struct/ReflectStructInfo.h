@@ -19,6 +19,20 @@ namespace suz
 		Unknown
 	};
 
+	enum class EContainerType : uint8
+	{
+		Vector3,
+		Vector4,
+		Quat,
+		Matrix3,
+		Matrix4,
+		String,
+		Vector,
+		Map,
+		Set,
+		Unknown
+	};
+
 	enum class EPrimitiveType : uint8
 	{
 		Bool,
@@ -57,6 +71,7 @@ namespace suz
 
 		ETypeCategory category = ETypeCategory::Unknown;				// 变量分类
 		EPrimitiveType primitiveType = EPrimitiveType::Unknown;			// 变量具体类型(仅当category==Primitive才有效)
+		EContainerType containerType = EContainerType::Unknown;			// 容器类型(仅当category==Container才有效)
 
 		const bool IsValid() const
 		{
