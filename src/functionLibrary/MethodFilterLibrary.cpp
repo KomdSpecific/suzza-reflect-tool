@@ -11,20 +11,14 @@ namespace suz
 {
 	void MethodFilterLibrary::CollectGetterSetterMethod(
 		clang::CXXRecordDecl* RecordDecl,
-		const std::string& GetterPrefix,
-		const std::string& SetterPrefix,
 		ClassInfo& OutClassInfo
 	)
 	{
-		if (GetterPrefix.empty() || SetterPrefix.empty()) return;
-
-		CheckIsTargetMethod(RecordDecl, GetterPrefix, SetterPrefix, OutClassInfo.fields);
+		CheckIsTargetMethod(RecordDecl, OutClassInfo.fields);
 	}
 
 	void MethodFilterLibrary::CheckIsTargetMethod(
 		clang::CXXRecordDecl* RecordDecl,
-		const std::string& GetterPrefix,
-		const std::string& SetterPrefix,
 		std::vector<FieldInfo>& OutFieldInfos
 	)
 	{
@@ -40,17 +34,20 @@ namespace suz
 
 				if (annoInfo.functionType == EFunctionType::GetterFunc)
 				{
-					GetSetFuncMap[annoInfo.fieldName][0] = annoInfo.functionName;
+					GetSetFuncMap[annoInfo.fieldName][0] = RecordDecl->getNameAsString() + "::" + annoInfo.functionName;
 				}
 				else if (annoInfo.functionType == EFunctionType::SetterFunc)
 				{
-					GetSetFuncMap[annoInfo.fieldName][1] = annoInfo.functionName;
+					GetSetFuncMap[annoInfo.fieldName][1] = RecordDecl->getNameAsString() + "::" + annoInfo.functionName;
 				}
 			}
 		}
 
 		for (FieldInfo& field : OutFieldInfos)
 		{
+			if (field.ownerClassName != RecordDecl->getNameAsString())
+				continue;
+
 			auto iterator = GetSetFuncMap.find(field.name);
 
 			if (iterator != GetSetFuncMap.end() && !iterator->second[0].empty())

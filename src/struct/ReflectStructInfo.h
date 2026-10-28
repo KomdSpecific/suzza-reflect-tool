@@ -41,6 +41,7 @@ namespace suz
 		Int32, UInt32,
 		Int64, UInt64,
 		Float,
+		Double,
 		Unknown
 	};
 
@@ -53,15 +54,15 @@ namespace suz
 
 	enum class Editability : uint8
 	{
-		Editable = 1 << 1,
-		ReadOnly = 1 << 2
+		Editable = 1 << 0,
+		ReadOnly = 1 << 1
 	};
 
 	struct FieldInfo
 	{
 		std::string name{};												// 变量名
 		std::string typeName{};											// 类型名(如果类型是别名则显示类型别名)
-		std::string parentClassName{};									// 父类名(如果字段在父类被定义则不为空)
+		std::string ownerClassName{};									// 所属类名
 		std::string editableEnumStr;									// 是否可更改
 
 		bool hasGetterMethod = false;

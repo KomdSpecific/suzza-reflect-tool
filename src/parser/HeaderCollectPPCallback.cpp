@@ -1,5 +1,4 @@
 #include "HeaderCollectPPCallback.h"
-#include "functionLibrary/MacroFilterLibrary.h"
 
 #include <clang/Basic/SourceManager.h>
 #include <clang/Basic/IdentifierTable.h>
@@ -37,7 +36,5 @@ namespace suz
 				m_macroExpandList[genericPath] = { macroLocation };
 			}
 		}
-
-		//MacroFilterLibrary::CollectMacroExpandLineNumber(MacroNameTok, "SUZZA_PROPERTY", m_sourceManager, {});
 	}
 }

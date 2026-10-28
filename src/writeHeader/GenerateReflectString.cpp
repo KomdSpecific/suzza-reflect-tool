@@ -1,6 +1,9 @@
 #include "GenerateReflectString.h"
+#include "SuzzaGenerateTool.h"
 
 #include <sstream>
+
+#include "debug/SuzzaLog.h"
 
 namespace suz
 {
@@ -34,6 +37,7 @@ namespace suz
 		stream << "	friend struct FieldInfo; \\" << std::endl;
 		stream << "public: \\" << std::endl;
 		stream << "	static const ClassInfo& StaticClass(); \\" << std::endl;
+		stream << "	static const std::vector<FieldInfo>& ClassField(); \\" << std::endl;
 
 		if (ClassData.second.superClassName.size() > 0)
 		{
@@ -48,7 +52,7 @@ namespace suz
 	}
 
 	std::string GenerateReflectString::GenerateClassSourceString(
-		const std::pair<std::string, ClassInfo>& ClassData,
+		const ClassInfo& ClassData,
 		const std::string& IncludeClassPath,
 		const std::string& ClassName,
 		const std::string& ClassPath
@@ -63,18 +67,23 @@ namespace suz
 		stream << "		\"" << ClassName << "\"," << std::endl;
 		stream << "		\"" << ClassPath << "\"," << std::endl;
 
-		if (ClassData.second.superClassName.size() > 0)
+		std::vector<std::string> fieldClasses{};
+		if (ClassData.superClassName.size() > 0)
 		{
 			stream << "		{\"";
-			for (usize i = 0; i < ClassData.second.superClassName.size(); i++)
+			for (usize i = 0; i < ClassData.superClassName.size(); i++)
 			{
-				if (i == ClassData.second.superClassName.size() - 1)
+				/* 顺带处理父类是否为反射类 */
+				if (SuzzaGenerateTool::FindClassName(ClassData.superClassName[i]))
+					fieldClasses.push_back(ClassData.superClassName[i]);
+
+				if (i == ClassData.superClassName.size() - 1)
 				{
-					stream << ClassData.second.superClassName[i] << "\"}," << std::endl;
+					stream << ClassData.superClassName[i] << "\"}," << std::endl;
 					continue;
 				}
 
-				stream << ClassData.second.superClassName[i] << "\", \"";
+				stream << ClassData.superClassName[i] << "\", \"";
 			}
 		}
 		else
@@ -82,14 +91,41 @@ namespace suz
 			stream << "		{}," << std::endl;
 		}
 
-		if (ClassData.second.fields.size() != 0)
+		bool bHaveReflectParentClass = !fieldClasses.empty();
+		bool bHaveFields = ClassData.fields.size() > 0;
+
+		if (bHaveFields || bHaveReflectParentClass)
 		{
 			stream << "		{\n			";
-			for (usize i = 0; i < ClassData.second.fields.size(); i++)
+			if (bHaveReflectParentClass)
 			{
-				FieldInfo currentField = ClassData.second.fields[i];
+				for (usize i = 0; i < fieldClasses.size(); i++)
+				{
+					if (i == fieldClasses.size() - 1)
+					{
+						/* 根据类本身是否存在字段输出 */
+						if(!bHaveFields)
+						{
+							stream << fieldClasses[i] << "::ClassField()\n		}\n	};\n";
+							continue;
+						}
+						else
+						{
+							stream << fieldClasses[i] << "::ClassField(),\n			";
+							continue;
+						}
+					}
 
-				if (i == ClassData.second.fields.size() - 1)
+					stream << fieldClasses[i] << "::ClassField(),\n			";
+				}
+			}
+
+			/* 遍历子类字段(只存储子类字段) */
+			for (usize i = 0; i < ClassData.fields.size(); i++)
+			{
+				FieldInfo currentField = ClassData.fields[i];
+
+				if (i == ClassData.fields.size() - 1)
 				{
 					/* 当前为最后一个元素 */
 					stream << GenerateFieldCode(currentField, ClassName, true);
@@ -107,25 +143,13 @@ namespace suz
 		stream << "	const ClassInfo& " << ClassName << "::StaticClass()\n	{\n		return m_" << ClassName << "ClassInfo;" << std::endl;
 		stream << "	}\n" << std::endl;
 
+		stream << "	const std::vector<FieldInfo>& " << ClassName << "::ClassField()\n	{\n		return m_" << ClassName << "ClassInfo.fields;" << std::endl;
+		stream << "	}\n" << std::endl;
+
 		stream << "	const ClassInfo& " << ClassName << "::GetClassInfo() const\n	{\n		return m_" << ClassName << "ClassInfo;" << std::endl;
 		stream << "	}\n}" << std::endl;
 
 		return stream.str();
-	}
-
-	std::string GenerateReflectString::GenerateContainerCode(const FieldInfo& InFieldInfo)
-	{
-		std::stringstream stream;
-
-		switch (InFieldInfo.containerType)
-		{
-		case EContainerType::Vector3:
-
-		default:
-			break;
-		}
-
-		return std::string();
 	}
 
 	std::string GenerateFieldCode(const FieldInfo& InFieldInfo, const std::string& ClassName, bool IsLastField)
@@ -134,14 +158,24 @@ namespace suz
 
 		std::string fieldEnumStr = GenerateCategoryEnumStr(InFieldInfo);
 
-		/* 字段为本类的字段 */
-		if (InFieldInfo.parentClassName.empty())
+		/* 存在Getter、Setter函数优先使用函数赋值方式 */
+		//SUZZA_LOG_INFO("ClassName: ", ClassName, ", FieldName: ", InFieldInfo.name, InFieldInfo.hasGetterMethod ? " true" : " false");
+		if(InFieldInfo.hasGetterMethod)
 		{
 			stream << "FieldInfo::CreateFieldInfo(";
 			stream << "\"" << InFieldInfo.name << "\", ";
 			stream << "\"" << InFieldInfo.typeName << "\", ";
-			stream << "SUZZA_OFFSET_OF(" << ClassName + "::" + InFieldInfo.name << ")" << ", ";
-			stream << "sizeof(" << InFieldInfo.typeName << "), ";
+
+			stream << "&" << InFieldInfo.getterMethodName << ", ";
+			if (InFieldInfo.hasSetterMethod)
+			{
+				stream << "&" << InFieldInfo.setterMethodName << ", ";
+			}
+			else
+			{
+				stream << "nullptr";
+			}
+
 			stream << fieldEnumStr;
 			if (IsLastField)
 			{
@@ -152,25 +186,14 @@ namespace suz
 				stream << InFieldInfo.editableEnumStr << "),\n			";
 			}
 		}
+		/* 偏移量处理方式 */
 		else
 		{
-			if (!InFieldInfo.hasGetterMethod) return {};
-
 			stream << "FieldInfo::CreateFieldInfo(";
 			stream << "\"" << InFieldInfo.name << "\", ";
 			stream << "\"" << InFieldInfo.typeName << "\", ";
-			stream << "\"" << InFieldInfo.parentClassName << "\", ";
-
-			stream << "&" << InFieldInfo.parentClassName << "::" << InFieldInfo.getterMethodName << ", ";
-			if (InFieldInfo.hasSetterMethod)
-			{
-				stream << "&" << InFieldInfo.parentClassName << "::" << InFieldInfo.setterMethodName << ", ";
-			}
-			else
-			{
-				stream << "nullptr";
-			}
-
+			stream << "SUZZA_OFFSET_OF(" << ClassName + "::" + InFieldInfo.name << ")" << ", ";
+			stream << "sizeof(" << InFieldInfo.typeName << "), ";
 			stream << fieldEnumStr;
 			if (IsLastField)
 			{
@@ -277,13 +300,13 @@ namespace suz
 			return "EPrimitiveType::UInt16, ";
 
 		case EPrimitiveType::Int32:
-			return "EPrimitiveType::UInt32, ";
+			return "EPrimitiveType::Int32, ";
 
 		case EPrimitiveType::UInt32:
 			return "EPrimitiveType::UInt32, ";
 
 		case EPrimitiveType::Int64:
-			return "EPrimitiveType::UInt64, ";
+			return "EPrimitiveType::Int64, ";
 
 		case EPrimitiveType::UInt64:
 			return "EPrimitiveType::UInt64, ";

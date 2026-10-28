@@ -177,7 +177,7 @@ namespace suz
 			return;
 		}
 
-		oss << GenerateReflectString::GenerateClassSourceString(ClassData, includeClassPath, className, classPath.generic_string());
+		oss << GenerateReflectString::GenerateClassSourceString(ClassData.second, includeClassPath, className, classPath.generic_string());
 
 		oss.close();
 	}

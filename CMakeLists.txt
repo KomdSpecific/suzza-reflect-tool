@@ -11,7 +11,7 @@ add_subdirectory(shared)
 # 在正式发布时将此设置为ON而不是OFF
 # 设置是否为生产构建
 # Make Sure PRODUCTION_BUILD WHEN SEND TO INTERNET
-set(PRODUCTION_BUILD ON CACHE BOOL "Make this a production build")
+set(PRODUCTION_BUILD OFF CACHE BOOL "Make this a production build")
 
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)

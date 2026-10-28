@@ -39,13 +39,12 @@ namespace suz
 
 		static void ReadAnnotationArgs(const clang::AnnotateAttr* AnnotateAttr, FieldInfo& OutFieldInfo);
 
-		static void GainPropertyTypeEnum(const clang::QualType& QType, FieldInfo& OutFieldInfo);
+		static void GainPropertyTypeEnum(const clang::QualType& QType, const clang::ASTContext& Context, FieldInfo& OutFieldInfo);
+
 
 		static void ParseContainerType(const clang::ClassTemplateSpecializationDecl* SpecialDecl, FieldInfo& OutFieldInfo);
 
 		static void HandleInGlmContainer(const std::string& ContainerName, const clang::TemplateArgumentList& ArgList, FieldInfo& OutFieldInfo);
 		static void HandleInStdContainer(const std::string& ContainerName, FieldInfo& OutFieldInfo);
-
-		static const std::unordered_map<std::string, EContainerType> m_containerSupportedType;
 	};
 }

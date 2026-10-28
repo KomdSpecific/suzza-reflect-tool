@@ -8,6 +8,8 @@
 
 namespace suz
 {
+	std::unordered_set<std::string> SuzzaGenerateTool::m_fieldClassName;
+
 	bool SuzzaGenerateTool::Init(const std::string& OutFilePath, const std::string& ProjectPath, const std::string& ParseJsonPath)
 	{
 		m_reflectFileWriter->SetOutFilePath(OutFilePath);
@@ -85,6 +87,22 @@ namespace suz
 	void SuzzaGenerateTool::WriteReflectFile()
 	{
 		m_reflectFileWriter->WriteReflectSourceFile();
+	}
+
+	bool SuzzaGenerateTool::InsertClassName(const std::string& ClassName)
+	{
+		auto [it, ok] = m_fieldClassName.insert(ClassName);
+		return ok;
+	}
+
+	bool SuzzaGenerateTool::FindClassName(const std::string& ClassName)
+	{
+		return m_fieldClassName.count(ClassName) > 0;
+	}
+
+	void SuzzaGenerateTool::FieldClassNameClear()
+	{
+		m_fieldClassName.clear();
 	}
 
 	bool SuzzaGenerateTool::CollectHeaderFilePath(const llvm::json::Array& ParseArray)

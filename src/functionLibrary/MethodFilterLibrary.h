@@ -18,16 +18,12 @@ namespace suz
 	public:
 		static void CollectGetterSetterMethod(
 			clang::CXXRecordDecl* RecordDecl,
-			const std::string& GetterPrefix,
-			const std::string& SetterPrefix,
 			ClassInfo& OutClassInfo
 		);
 
 	private:
 		static void CheckIsTargetMethod(
 			clang::CXXRecordDecl* RecordDecl,
-			const std::string& GetterPrefix,
-			const std::string& SetterPrefix,
 			std::vector<FieldInfo>& OutFieldInfos
 		);
 

@@ -15,7 +15,7 @@ namespace suz
 		}
 		else if (EnumName == "EFunctionType")
 		{
-			
+
 		}
 	}
 

@@ -2,6 +2,7 @@
 #include "HeaderCollectPPCallback.h"
 #include "functionLibrary/PropertyFilterLibrary.h"
 #include "functionLibrary/MethodFilterLibrary.h"
+#include "SuzzaGenerateTool.h"
 
 #include <clang/Basic/SourceManager.h>
 #include <filesystem>
@@ -72,6 +73,7 @@ namespace suz
 				if (SourceManager.isBeforeInTranslationUnit(sourceRange.getBegin(), macroLoc) &&
 					SourceManager.isBeforeInTranslationUnit(macroLoc, sourceRange.getEnd()))
 				{
+					SuzzaGenerateTool::InsertClassName(RecordDecl->getNameAsString());
 					return true;
 				}
 			}

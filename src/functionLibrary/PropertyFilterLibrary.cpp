@@ -11,6 +11,8 @@
 
 namespace suz
 {
+	EPrimitiveType MakePrimitiveTypeEnum(const clang::ASTContext& Context, const clang::QualType& CanonicalType, const clang::BuiltinType& Builtin);
+
 	void PropertyFilterLibrary::ConstructClassInfo(
 		clang::CXXRecordDecl* RecordDecl,
 		const clang::SourceManager& SourceManager,
@@ -66,7 +68,7 @@ namespace suz
 		ReadHasAnnotationField(RecordDecl, OutClassInfo, ParentClassName);
 
 		/* 收集指定变量的Getter和Setter函数 */
-		MethodFilterLibrary::CollectGetterSetterMethod(RecordDecl, "Getter:", "Setter:", OutClassInfo);
+		MethodFilterLibrary::CollectGetterSetterMethod(RecordDecl, OutClassInfo);
 
 		/* 递归遍历父类 */
 		for (const clang::CXXBaseSpecifier& base : RecordDecl->bases())
@@ -101,6 +103,7 @@ namespace suz
 		if (isParentClass)
 		{
 			OutClassInfo.superClassName.push_back(ParentClassName);
+			return;
 		}
 
 		/* 提取当前类自身的所有字段 */
@@ -113,7 +116,7 @@ namespace suz
 				if (const clang::AnnotateAttr* annotateAttr = clang::dyn_cast<clang::AnnotateAttr>(attr))
 				{
 					/* 获取注解内的固定字面量 */
-					if (annotateAttr->getAnnotation() != "property:") return;
+					if (annotateAttr->getAnnotation() != "property:") continue;
 
 					FieldInfo fieldInfo{};
 					/* 读取注解内的参数 */
@@ -121,17 +124,15 @@ namespace suz
 
 					clang::QualType fieldType = field->getType();
 					/* 构建字段的枚举类型 */
-					GainPropertyTypeEnum(fieldType, fieldInfo);
+					GainPropertyTypeEnum(fieldType, RecordDecl->getASTContext(), fieldInfo);
 
 					std::string fieldName = field->getNameAsString();			// 获取字段名称
 					std::string fieldTypeStr = fieldType.getAsString();			// 获取字段类型名称
 
 					fieldInfo.name = fieldName;
 					fieldInfo.typeName = fieldTypeStr;
-					if (isParentClass)
-					{
-						fieldInfo.parentClassName = ParentClassName;
-					}
+					fieldInfo.ownerClassName = RecordDecl->getNameAsString();	// 设置所属类名
+					
 					//SUZZA_LOG_INFO("FieldName: ", fieldInfo.name, " AnnoString: ", annoStringRef.str());
 					OutClassInfo.fields.push_back(fieldInfo);
 				}
@@ -148,17 +149,21 @@ namespace suz
 				llvm::StringRef argName = strExpr->getString();
 
 				usize enumSeparate = argName.find("::");
-				llvm::StringRef enumName = argName.substr(0, enumSeparate);
-				llvm::StringRef enumValue = argName.substr(enumSeparate + 2);
+				if (enumSeparate != std::string::npos)
+				{
+					llvm::StringRef enumName = argName.substr(0, enumSeparate);
+					llvm::StringRef enumValue = argName.substr(enumSeparate + 2);
 
-				EnumParseLibrary::ReadEnumStructInfo(enumName, enumValue, OutFieldInfo);
+					EnumParseLibrary::ReadEnumStructInfo(enumName, enumValue, OutFieldInfo);
+				}
 			}
 		}
 	}
 
-	void PropertyFilterLibrary::GainPropertyTypeEnum(const clang::QualType& QType, FieldInfo& OutFieldInfo)
+	void PropertyFilterLibrary::GainPropertyTypeEnum(const clang::QualType& QType, const clang::ASTContext& Context, FieldInfo& OutFieldInfo)
 	{
-		const clang::Type* type = QType.getTypePtrOrNull();
+		const clang::QualType canonicalType = QType.getCanonicalType();
+		const clang::Type* type = canonicalType.getTypePtrOrNull();
 		if (!type) return;
 
 		/* 优先判断容器类型 */
@@ -198,26 +203,27 @@ namespace suz
 			{
 			case clang::BuiltinType::Bool:
 				OutFieldInfo.primitiveType = EPrimitiveType::Bool; break;
-			case clang::BuiltinType::SChar:
-				OutFieldInfo.primitiveType = EPrimitiveType::Int8; break;
-			case clang::BuiltinType::UChar:
-				OutFieldInfo.primitiveType = EPrimitiveType::UInt8; break;
-			case clang::BuiltinType::Short:
-				OutFieldInfo.primitiveType = EPrimitiveType::Int16; break;
-			case clang::BuiltinType::UShort:
-				OutFieldInfo.primitiveType = EPrimitiveType::UInt16; break;
-			case clang::BuiltinType::Int:
-				OutFieldInfo.primitiveType = EPrimitiveType::Int32; break;
-			case clang::BuiltinType::UInt:
-				OutFieldInfo.primitiveType = EPrimitiveType::UInt32; break;
-			case clang::BuiltinType::LongLong:
-				OutFieldInfo.primitiveType = EPrimitiveType::Int64; break;
-			case clang::BuiltinType::ULongLong:
-				OutFieldInfo.primitiveType = EPrimitiveType::UInt64; break;
+
 			case clang::BuiltinType::Float:
 				OutFieldInfo.primitiveType = EPrimitiveType::Float; break;
+
+			case clang::BuiltinType::Double:
+				OutFieldInfo.primitiveType = EPrimitiveType::Double; break;
+
 			default:
-				OutFieldInfo.primitiveType = EPrimitiveType::Unknown; break;
+				if (builtinType->isInteger())
+				{
+					OutFieldInfo.primitiveType = MakePrimitiveTypeEnum(Context, canonicalType, *builtinType);
+					if (OutFieldInfo.primitiveType == EPrimitiveType::Unknown)
+					{
+						SUZZA_LOG_INFO("未识别的整数类型!: ", canonicalType.getAsString());
+					}
+				}
+				else
+				{
+					OutFieldInfo.primitiveType = EPrimitiveType::Unknown;
+					SUZZA_LOG_INFO("未识别的内建类型!: ", canonicalType.getAsString());
+				}
 			}
 		}
 		else
@@ -289,12 +295,12 @@ namespace suz
 			uint8 column, raw;
 			if (!tryGetIntegralArg(0, column) || !tryGetIntegralArg(1, raw)) return;
 
-			if (column == raw == '3')
+			if (column == raw == 3)
 			{
 				OutFieldInfo.category = ETypeCategory::Container;
 				OutFieldInfo.containerType = EContainerType::Matrix3;
 			}
-			else if (column == raw == '4')
+			else if (column == raw == 4)
 			{
 				OutFieldInfo.category = ETypeCategory::Container;
 				OutFieldInfo.containerType = EContainerType::Matrix4;
@@ -311,29 +317,39 @@ namespace suz
 	{
 		if (ContainerName == "std::basic_string")
 		{
-			OutFieldInfo.category == ETypeCategory::Container;
-			OutFieldInfo.containerType == EContainerType::String;
+			OutFieldInfo.category = ETypeCategory::Container;
+			OutFieldInfo.containerType = EContainerType::String;
 		}
 		else if (ContainerName == "std::vector")
 		{
-			OutFieldInfo.category == ETypeCategory::Container;
-			OutFieldInfo.containerType == EContainerType::Vector;
+			OutFieldInfo.category = ETypeCategory::Container;
+			OutFieldInfo.containerType = EContainerType::Vector;
 		}
 		else if (ContainerName == "std::map")
 		{
-			OutFieldInfo.category == ETypeCategory::Container;
-			OutFieldInfo.containerType == EContainerType::Map;
+			OutFieldInfo.category = ETypeCategory::Container;
+			OutFieldInfo.containerType = EContainerType::Map;
 		}
 		else if (ContainerName == "std::set")
 		{
-			OutFieldInfo.category == ETypeCategory::Container;
-			OutFieldInfo.containerType == EContainerType::Set;
+			OutFieldInfo.category = ETypeCategory::Container;
+			OutFieldInfo.containerType = EContainerType::Set;
 		}
 	}
 
-	const std::unordered_map<std::string, EContainerType> PropertyFilterLibrary::m_containerSupportedType = {
-		{"glm::vec3", EContainerType::Vector3},{"glm::vec4", EContainerType::Vector4},{"glm::quat",EContainerType::Quat},{"glm::mat3",EContainerType::Matrix3},
-		{"glm::mat4",EContainerType::Matrix4},
-		{"std::string", EContainerType::String},{"std::vector", EContainerType::Vector},{"std::map",EContainerType::Map},{"std::set",EContainerType::Set}
-	};
+	EPrimitiveType MakePrimitiveTypeEnum(const clang::ASTContext& Context, const clang::QualType& CanonicalType, const clang::BuiltinType& Builtin)
+	{
+		/* 判断有无符号的整数类型(包括char类型) */
+		const bool bIsSignedInteger = Builtin.isSignedInteger();
+
+		switch (Context.getIntWidth(CanonicalType))
+		{
+		case 8: return bIsSignedInteger ? EPrimitiveType::Int8 : EPrimitiveType::UInt8;
+		case 16: return bIsSignedInteger ? EPrimitiveType::Int16 : EPrimitiveType::UInt16;
+		case 32: return bIsSignedInteger ? EPrimitiveType::Int32 : EPrimitiveType::UInt32;
+		case 64: return bIsSignedInteger ? EPrimitiveType::Int64 : EPrimitiveType::UInt64;
+		default:
+			return EPrimitiveType::Unknown;
+		}
+	}
 }

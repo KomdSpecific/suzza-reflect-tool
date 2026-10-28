@@ -3,6 +3,7 @@
 #include "writeHeader/ReflectFileWriter.h"
 
 #include <llvm/Support/JSON.h>
+#include <unordered_set>
 
 namespace suz
 {
@@ -17,6 +18,10 @@ namespace suz
 
 		void WriteReflectFile();
 
+		static bool InsertClassName(const std::string& ClassName);
+		static bool FindClassName(const std::string& ClassName);
+		static void FieldClassNameClear();
+
 	private:
 		SuzzaGenerateTool(SuzzaGenerateTool&) = delete;
 		SuzzaGenerateTool(const SuzzaGenerateTool&) = delete;
@@ -28,5 +33,7 @@ namespace suz
 		llvm::json::Array m_parseFileArr = {};
 
 		std::unique_ptr<ReflectFileWriter> m_reflectFileWriter = {};
+
+		static std::unordered_set<std::string> m_fieldClassName;
 	};
 }

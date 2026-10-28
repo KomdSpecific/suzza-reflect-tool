@@ -14,12 +14,10 @@ namespace suz
 			const std::string& ClassName
 		);
 		static std::string GenerateClassSourceString(
-			const std::pair<std::string, ClassInfo>& ClassData,
+			const ClassInfo& ClassData,
 			const std::string& IncludeClassPath,
 			const std::string& ClassName,
 			const std::string& ClassPath
 		);
-
-		static std::string GenerateContainerCode(const FieldInfo& InFieldInfo);
 	};
 }
